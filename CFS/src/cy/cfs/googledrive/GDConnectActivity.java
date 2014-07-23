@@ -81,9 +81,6 @@ public class GDConnectActivity extends Activity implements
 	@Override
 	public void onConnected(Bundle arg0) {
 		Log.i(TAG, "connection connected.");
-		GDCFSInstance googleCFS = (GDCFSInstance)CFSTable.instanceMap.get(cfsInstanceId);
-		googleCFS.processOp();
-		
 	}
 
 	@Override

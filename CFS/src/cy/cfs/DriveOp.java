@@ -1,9 +1,16 @@
 package cy.cfs;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
-public class DriveOp {
+import android.util.Log;
+
+public abstract class DriveOp implements Runnable, OpCallback{
+	
+	protected static final String TAG = "DriveOp";
 	
 	public static int OP_ADD_FILE=1;
 	public static int OP_GET_FILE=2;
@@ -11,20 +18,36 @@ public class DriveOp {
 	public static int OP_DEL_FILE=4;
 	public static int OP_DEL_DIR=5;
 	
+	//
+	private CFSInstance cfsInst;
+	public CFSInstance getCfsInst() {
+		return cfsInst;
+	}
+	public void setCfsInst(CFSInstance cfsInst) {
+		this.cfsInst = cfsInst;
+	}
 	
-	private int opCode;
+	//
+	private String id;
+	public String getId() {
+		return id;
+	}
+	public void setId(String id) {
+		this.id = id;
+	}
+	public DriveOp(CFSInstance cfsInstance){
+		this.cfsInst = cfsInstance;
+		id = File.separator + (new Date()).getTime();
+	}
+	
 	//callback in the calling order, only the last can be asynchronous, the other should be synchronous
 	private List<OpCallback> callbackList = new ArrayList<OpCallback>(); 
 	
-	public int getOpCode() {
-		return opCode;
-	}
-	public void setOpCode(int opCode) {
-		this.opCode = opCode;
-	}
-	
 	public List<OpCallback> getCallback() {
 		return callbackList;
+	}
+	public void insertCallback(OpCallback callback){
+		callbackList.add(0, callback);
 	}
 	public void addCallback(OpCallback callback) {
 		this.callbackList.add(callback);
@@ -32,4 +55,37 @@ public class DriveOp {
 	public void addCallbackList(List<OpCallback> callbacks) {
 		this.callbackList.addAll(callbacks);
 	}
+
+
+	
+	public abstract void myRun();
+	
+	@Override
+	public void run(){
+		try{
+			if (cfsInst.isConnected()){
+				myRun();
+			}else{
+				cfsInst.connect();
+				try {
+					//wait 3 second
+					Thread.sleep(3000);
+				} catch (InterruptedException e) {
+					Log.e(TAG, "", e);
+				}
+				cfsInst.submit(this);
+			}
+		}catch(Throwable t){
+			Log.e(TAG, "caught in run", t);
+		}
+	}
+	
+	public void onSuccess(Object result){
+		run();
+	}
+	
+	public void onFailure(Object result){
+		//
+	}
+
 }

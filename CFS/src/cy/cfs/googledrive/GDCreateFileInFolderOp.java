@@ -14,6 +14,8 @@ import com.google.android.gms.drive.DriveApi.ContentsResult;
 import com.google.android.gms.drive.DriveApi.DriveIdResult;
 import com.google.android.gms.drive.DriveFolder.DriveFileResult;
 import com.google.android.gms.drive.DriveFolder.DriveFolderResult;
+import com.google.android.gms.drive.events.ChangeEvent;
+import com.google.android.gms.drive.events.DriveEvent.Listener;
 
 import cy.cfs.DriveOp;
 import cy.cfs.OpCallback;
@@ -23,27 +25,43 @@ public class GDCreateFileInFolderOp extends DriveOp{
 	protected static final String TAG = "GDCreateFileInFolderOp";
 	
 	private String requestFileName;
-	private DriveId folderDriverId;
+	private String folderResourceId;
+	private DriveId mFolderDriveId;
 	private String fileName;
 	private String mimeType;
 	private GDCFSInstance cfsIns;
 	private byte[] binary;
 	
-	public GDCreateFileInFolderOp(String requestFileName, DriveId folderDriverId, 
+	public GDCreateFileInFolderOp(String requestFileName, String folderResourceId, 
 			String fileName, String mimeType, byte[] binary, GDCFSInstance gdcfsIns){
+		super(gdcfsIns);
 		this.requestFileName = requestFileName;
-		this.folderDriverId = folderDriverId;
+		this.folderResourceId = folderResourceId;
 		this.fileName = fileName;
 		this.mimeType = mimeType;
 		this.binary = binary;
 		this.cfsIns = gdcfsIns;
 	}
 	
-	public void process(){
-        Drive.DriveApi.newContents(cfsIns.getGoogleApiClient())
-                .setResultCallback(contentsResult);
+	@Override
+	public void myRun(){
+        Drive.DriveApi.fetchDriveId(cfsIns.getGoogleApiClient(), folderResourceId)
+        		.setResultCallback(idCallback);
     };
 
+    final private ResultCallback<DriveIdResult> idCallback = new ResultCallback<DriveIdResult>() {
+        @Override
+        public void onResult(DriveIdResult result) {
+            if (!result.getStatus().isSuccess()) {
+                Log.e(TAG, "Cannot find DriveId. Are you authorized to view this file?");
+                return;
+            }
+            mFolderDriveId = result.getDriveId();
+            Drive.DriveApi.newContents(cfsIns.getGoogleApiClient())
+                    .setResultCallback(contentsResult);
+        }
+    };
+    
     final private ResultCallback<ContentsResult> contentsResult = new
             ResultCallback<ContentsResult>() {
         @Override
@@ -52,7 +70,7 @@ public class GDCreateFileInFolderOp extends DriveOp{
                 Log.e(TAG, "Error while trying to create new file contents");
                 return;
             }
-            DriveFolder folder = Drive.DriveApi.getFolder(cfsIns.getGoogleApiClient(), folderDriverId);
+            DriveFolder folder = Drive.DriveApi.getFolder(cfsIns.getGoogleApiClient(), mFolderDriveId);
             MetadataChangeSet changeSet = new MetadataChangeSet.Builder()
                     .setTitle(fileName)
                     .setMimeType(mimeType)
@@ -73,9 +91,26 @@ public class GDCreateFileInFolderOp extends DriveOp{
         public void onResult(DriveFileResult result) {
             if (!result.getStatus().isSuccess()) {
                 Log.e(TAG, "Error while trying to create the file");
-                return;
+                List<OpCallback> cbList = getCallback();
+	            for (OpCallback cb: cbList){
+	            	cb.onFailure(result.getDriveFile().getDriveId().getResourceId());
+	            }
+            }else{
+            	result.getDriveFile().addChangeListener(cfsIns.getGoogleApiClient(), (new Listener<ChangeEvent>() {
+            	    @Override
+            	    public void onEvent(ChangeEvent event) {
+            	    	String resourceId = event.getDriveId().getResourceId();
+            	    	if (resourceId!=null){
+	            	    	Log.i(TAG, "get the resourcid: " + resourceId);
+	        	            List<OpCallback> cbList = getCallback();
+	        	            for (OpCallback cb: cbList){
+	        	            	cb.onSuccess(resourceId);
+	        	            }
+            	    	}
+            	    }
+            	}));
+            	
             }
-            Log.i(TAG, "Created a file: " + result.getDriveFile().getDriveId());
         }
     };
 

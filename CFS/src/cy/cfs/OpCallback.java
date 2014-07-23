@@ -2,6 +2,8 @@ package cy.cfs;
 
 public interface OpCallback {
 	
-	public void execute(Object result);
+	public void onSuccess(Object result);
+	
+	public void onFailure(Object result);
 
 }

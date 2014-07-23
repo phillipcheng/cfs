@@ -3,6 +3,7 @@ package cy.cfs;
 
 import java.io.ByteArrayOutputStream;
 
+import cy.cfs.googledrive.AddFileOp;
 import cy.cfs.googledrive.GDCFSInstance;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -36,11 +37,12 @@ public class CFS {
 	
 	//
 	public void asyncSaveImageFile(String fileKey, Bitmap bmp, CFSSaveFilesCallback callback){
-		
-		AddFileOp addFile = new AddFileOp();
+		long size = bmp.getRowBytes() * bmp.getHeight();
+		CFSInstance cfsIns = cfsTable.getFitInstance(size);
+		AddFileOp addFile = new AddFileOp(cfsIns);
 		addFile.setFileName(fileKey);
 		addFile.setMimeType("image/png");
-		addFile.setSize(bmp.getRowBytes() * bmp.getHeight());
+		addFile.setSize(size);
 		
 		ByteArrayOutputStream stream = new ByteArrayOutputStream();
 		bmp.compress(Bitmap.CompressFormat.PNG, 100, stream);
@@ -49,8 +51,7 @@ public class CFS {
 		if (callback!=null){
 			addFile.addCallback(callback);
 		}
-		CFSInstance cfsIns = cfsTable.getFitInstance(addFile.getSize());
-		cfsIns.addOp(addFile);
+		cfsIns.submit(addFile);
 	}
 	
 	//

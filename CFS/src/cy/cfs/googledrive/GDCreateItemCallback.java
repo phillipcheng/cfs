@@ -16,10 +16,18 @@ public class GDCreateItemCallback implements OpCallback{
 		this.cfsInst = cfsInst;
 	}
 	
-	public void execute(Object result){
-		DriveId driveId = (DriveId)result;
-		Map<String, DriveId> dirMap = cfsInst.getDirMap();
-		dirMap.put(requestFileName, driveId);
+	public void onSuccess(Object result){
+		//update the result
+		String resourceId = (String)result;
+		Map<String, String> dirMap = cfsInst.getDirMap();
+		dirMap.put(requestFileName, resourceId);
+		
 	}
 
+	@Override
+	public void onFailure(Object result) {
+		//remove the entry in map
+		Map<String, String> dirMap = cfsInst.getDirMap();
+		dirMap.remove(requestFileName);
+	}
 }
