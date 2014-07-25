@@ -4,13 +4,15 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 import android.util.Log;
 
-public abstract class DriveOp implements Runnable, OpCallback{
+public abstract class DriveOp implements Runnable, CallbackOp{
 	
 	protected static final String TAG = "DriveOp";
+	
+	public static final String WORKING_MARK="working:";
+	public static final String ERROR_MAKE="error:";
 	
 	public static int OP_ADD_FILE=1;
 	public static int OP_GET_FILE=2;
@@ -22,9 +24,6 @@ public abstract class DriveOp implements Runnable, OpCallback{
 	private CFSInstance cfsInst;
 	public CFSInstance getCfsInst() {
 		return cfsInst;
-	}
-	public void setCfsInst(CFSInstance cfsInst) {
-		this.cfsInst = cfsInst;
 	}
 	
 	//
@@ -41,18 +40,18 @@ public abstract class DriveOp implements Runnable, OpCallback{
 	}
 	
 	//callback in the calling order, only the last can be asynchronous, the other should be synchronous
-	private List<OpCallback> callbackList = new ArrayList<OpCallback>(); 
+	private List<CallbackOp> callbackList = new ArrayList<CallbackOp>(); 
 	
-	public List<OpCallback> getCallback() {
+	public List<CallbackOp> getCallback() {
 		return callbackList;
 	}
-	public void insertCallback(OpCallback callback){
+	public void insertCallback(CallbackOp callback){
 		callbackList.add(0, callback);
 	}
-	public void addCallback(OpCallback callback) {
+	public void addCallback(CallbackOp callback) {
 		this.callbackList.add(callback);
 	}
-	public void addCallbackList(List<OpCallback> callbacks) {
+	public void addCallbackList(List<CallbackOp> callbacks) {
 		this.callbackList.addAll(callbacks);
 	}
 
@@ -80,12 +79,37 @@ public abstract class DriveOp implements Runnable, OpCallback{
 		}
 	}
 	
-	public void onSuccess(Object result){
+	public void onSuccess(Object request, Object result){
 		run();
 	}
 	
-	public void onFailure(Object result){
+	public void onFailure(Object request, Object result){
 		//
 	}
+	
+	public void cfsCallback(boolean isSuccess, boolean isFile, String requestFileName, String result){
+		cfsInst.callback(isSuccess, isFile, requestFileName, result);
+	}
+	/**
+     * 
+     * @param isSuccess
+     * @param isFile
+     * @param result: resourceId or error message
+     */
+    public void finalCallback(boolean isSuccess, boolean isFile, String requestFileName, String result){
+    	cfsCallback(isSuccess, isFile, requestFileName, result);
+    	if (isSuccess){
+    		List<CallbackOp> cbList = getCallback();
+            for (CallbackOp cb: cbList){
+            	cb.onSuccess(requestFileName, result);
+            }
+    	}else{
+    		//
+    		List<CallbackOp> cbList = getCallback();
+            for (CallbackOp cb: cbList){
+            	cb.onFailure(requestFileName, result);
+            }
+    	}
+    }
 
 }

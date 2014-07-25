@@ -1,7 +1,6 @@
 package cy.cfs.googledrive;
 
 import java.io.IOException;
-import java.util.List;
 
 import android.util.Log;
 
@@ -9,16 +8,21 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.drive.Drive;
 import com.google.android.gms.drive.DriveFolder;
 import com.google.android.gms.drive.DriveId;
+import com.google.android.gms.drive.Metadata;
 import com.google.android.gms.drive.MetadataChangeSet;
 import com.google.android.gms.drive.DriveApi.ContentsResult;
 import com.google.android.gms.drive.DriveApi.DriveIdResult;
+import com.google.android.gms.drive.DriveApi.MetadataBufferResult;
 import com.google.android.gms.drive.DriveFolder.DriveFileResult;
-import com.google.android.gms.drive.DriveFolder.DriveFolderResult;
 import com.google.android.gms.drive.events.ChangeEvent;
 import com.google.android.gms.drive.events.DriveEvent.Listener;
+import com.google.android.gms.drive.query.Filters;
+import com.google.android.gms.drive.query.Query;
+import com.google.android.gms.drive.query.SearchableField;
 
+import cy.cfs.CFSInstance;
+import cy.cfs.CallbackOp;
 import cy.cfs.DriveOp;
-import cy.cfs.OpCallback;
 
 public class GDCreateFileInFolderOp extends DriveOp{
 	
@@ -29,23 +33,21 @@ public class GDCreateFileInFolderOp extends DriveOp{
 	private DriveId mFolderDriveId;
 	private String fileName;
 	private String mimeType;
-	private GDCFSInstance cfsIns;
 	private byte[] binary;
 	
 	public GDCreateFileInFolderOp(String requestFileName, String folderResourceId, 
-			String fileName, String mimeType, byte[] binary, GDCFSInstance gdcfsIns){
+			String fileName, String mimeType, byte[] binary, CFSInstance gdcfsIns){
 		super(gdcfsIns);
 		this.requestFileName = requestFileName;
 		this.folderResourceId = folderResourceId;
 		this.fileName = fileName;
 		this.mimeType = mimeType;
 		this.binary = binary;
-		this.cfsIns = gdcfsIns;
 	}
 	
 	@Override
 	public void myRun(){
-        Drive.DriveApi.fetchDriveId(cfsIns.getGoogleApiClient(), folderResourceId)
+        Drive.DriveApi.fetchDriveId(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), folderResourceId)
         		.setResultCallback(idCallback);
     };
 
@@ -57,8 +59,39 @@ public class GDCreateFileInFolderOp extends DriveOp{
                 return;
             }
             mFolderDriveId = result.getDriveId();
-            Drive.DriveApi.newContents(cfsIns.getGoogleApiClient())
-                    .setResultCallback(contentsResult);
+            query();
+        }
+    };
+    
+    private void query(){
+    	Query query = new Query.Builder()
+			.addFilter(Filters.eq(SearchableField.TITLE, fileName))
+			.build();
+		DriveFolder folder = Drive.DriveApi
+                .getFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), mFolderDriveId);
+        folder.queryChildren(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), query)
+                .setResultCallback(queryCallback);
+    	
+    }
+    
+    final private ResultCallback<MetadataBufferResult> queryCallback = new
+            ResultCallback<MetadataBufferResult>() {
+        @Override
+        public void onResult(MetadataBufferResult result) {
+            if (!result.getStatus().isSuccess()) {
+                Log.e(TAG, "Problem while retrieving results");
+                return;
+            }
+            if (result.getMetadataBuffer().getCount()>0){
+            	Metadata md = result.getMetadataBuffer().get(0);
+            	String resourceId = md.getDriveId().getResourceId();
+            	finalCallback(true, true, requestFileName, resourceId);
+            	Log.i(TAG, String.format("%s exists with resourceId:%s", requestFileName, resourceId));
+            }else{
+            	//new content
+            	Drive.DriveApi.newContents(((GDCFSInstance)getCfsInst()).getGoogleApiClient())
+                	.setResultCallback(contentsResult);
+            }
         }
     };
     
@@ -70,7 +103,7 @@ public class GDCreateFileInFolderOp extends DriveOp{
                 Log.e(TAG, "Error while trying to create new file contents");
                 return;
             }
-            DriveFolder folder = Drive.DriveApi.getFolder(cfsIns.getGoogleApiClient(), mFolderDriveId);
+            DriveFolder folder = Drive.DriveApi.getFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), mFolderDriveId);
             MetadataChangeSet changeSet = new MetadataChangeSet.Builder()
                     .setTitle(fileName)
                     .setMimeType(mimeType)
@@ -80,38 +113,30 @@ public class GDCreateFileInFolderOp extends DriveOp{
 			} catch (IOException e) {
 				Log.e(TAG, "", e);
 			}
-            folder.createFile(cfsIns.getGoogleApiClient(), changeSet, result.getContents())
-                    .setResultCallback(fileCallback);
+            folder.createFile(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), changeSet, result.getContents())
+                    .setResultCallback(fileChangedCallback);
         }
     };
 
-    final private ResultCallback<DriveFileResult> fileCallback = new
+    final private ResultCallback<DriveFileResult> fileChangedCallback = new
             ResultCallback<DriveFileResult>() {
         @Override
         public void onResult(DriveFileResult result) {
             if (!result.getStatus().isSuccess()) {
                 Log.e(TAG, "Error while trying to create the file");
-                List<OpCallback> cbList = getCallback();
-	            for (OpCallback cb: cbList){
-	            	cb.onFailure(result.getDriveFile().getDriveId().getResourceId());
-	            }
+                finalCallback(false, true, requestFileName, null);
             }else{
-            	result.getDriveFile().addChangeListener(cfsIns.getGoogleApiClient(), (new Listener<ChangeEvent>() {
+            	result.getDriveFile().addChangeListener(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), (new Listener<ChangeEvent>() {
             	    @Override
             	    public void onEvent(ChangeEvent event) {
             	    	String resourceId = event.getDriveId().getResourceId();
             	    	if (resourceId!=null){
 	            	    	Log.i(TAG, "get the resourcid: " + resourceId);
-	        	            List<OpCallback> cbList = getCallback();
-	        	            for (OpCallback cb: cbList){
-	        	            	cb.onSuccess(resourceId);
-	        	            }
+	        	            finalCallback(true, true, requestFileName, resourceId);
             	    	}
             	    }
             	}));
-            	
             }
         }
     };
-
 }

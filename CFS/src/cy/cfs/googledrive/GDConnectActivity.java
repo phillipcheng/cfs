@@ -5,13 +5,16 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.drive.Drive;
 
-import cy.cfs.CFSTable;
+import cy.cfs.CFS;
+import cy.cfs.CFSInstance;
+import cy.cfs.R;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.content.IntentSender.SendIntentException;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
 
 public class GDConnectActivity extends Activity implements
 	GoogleApiClient.ConnectionCallbacks, 
@@ -20,30 +23,50 @@ public class GDConnectActivity extends Activity implements
 	private static final String TAG = "GoogleDriveConnectActivity";
 	private static final int REQUEST_CODE_RESOLUTION = 1;
 	
-	public static final String INTENT_EXTRA_CFS_INSTANCE_ID="cfsInstanceId";
 	public static final String CFS_ACTION_GOOGLEAPICONNECT="cfs.action.googleAPIConnect";
-	private String cfsInstanceId;
+
+	private TextView tvID;
+	private TextView tvStatus;
+	private String cfsId;
+	private GDCFSInstance googleCFS;
+	GoogleApiClient mGoogleApiClient;
 	
-	
-	@Override
-    protected void onResume() {
-        super.onResume();
-        Intent intent = getIntent();
-        cfsInstanceId = intent.getStringExtra(INTENT_EXTRA_CFS_INSTANCE_ID);
-        Log.i(TAG, "cfsInstanceId:" + cfsInstanceId);
-        GDCFSInstance googleCFS = (GDCFSInstance)CFSTable.instanceMap.get(cfsInstanceId);
-        GoogleApiClient mGoogleApiClient = googleCFS.getGoogleApiClient();
-        if (mGoogleApiClient == null) {
+	private void connectIfNot(){
+		if (mGoogleApiClient == null) {
             mGoogleApiClient = new GoogleApiClient.Builder(this)
                     .addApi(Drive.API)
                     .addScope(Drive.SCOPE_FILE)
-                    .addScope(Drive.SCOPE_APPFOLDER) // required for App Folder sample
                     .addConnectionCallbacks(this)
                     .addOnConnectionFailedListener(this)
                     .build();
             googleCFS.setGoogleApiClient(mGoogleApiClient);
         }
         mGoogleApiClient.connect();
+	}
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		
+        setContentView(R.layout.connect_activity);
+
+        Intent intent = getIntent();
+        cfsId = intent.getStringExtra(CFSInstance.INTENT_EXTRA_CFS_INSTANCE_ID);
+        tvID = (TextView) findViewById(R.id.txtCFSID);
+        tvID.setText(cfsId);
+        googleCFS = (GDCFSInstance)CFS.getCFSInstanceById(cfsId);
+        mGoogleApiClient= googleCFS.getGoogleApiClient();
+        
+        tvStatus = (TextView) findViewById(R.id.txtStatus);
+        tvStatus.setText(googleCFS.getStatus());
+        
+        connectIfNot();
+	}
+	
+	@Override
+    protected void onResume() {
+        super.onResume();
+        connectIfNot();
     }
 	
     @Override
@@ -51,9 +74,7 @@ public class GDConnectActivity extends Activity implements
             Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CODE_RESOLUTION && resultCode == RESULT_OK) {
-			GDCFSInstance googleCFS = (GDCFSInstance)CFSTable.instanceMap.get(cfsInstanceId);
-			GoogleApiClient mGoogleApiClient = googleCFS.getGoogleApiClient();
-        	Log.i(TAG, "cfsInstanceId:" + cfsInstanceId);
+        	Log.i(TAG, "cfsInstanceId:" + cfsId);
         	if (mGoogleApiClient!=null)
         		mGoogleApiClient.connect();
         	else{
@@ -68,6 +89,8 @@ public class GDConnectActivity extends Activity implements
         if (!result.hasResolution()) {
             // show the localized error dialog.
             GooglePlayServicesUtil.getErrorDialog(result.getErrorCode(), this, 0).show();
+            googleCFS.setStatus(CFSInstance.UNCONNECTED);
+            tvStatus.setText(googleCFS.getStatus());
             return;
         }
         try {
@@ -81,12 +104,13 @@ public class GDConnectActivity extends Activity implements
 	@Override
 	public void onConnected(Bundle arg0) {
 		Log.i(TAG, "connection connected.");
+        googleCFS.setStatus(CFSInstance.CONNECTED);
+        tvStatus.setText(googleCFS.getStatus());
 	}
 
 	@Override
 	public void onConnectionSuspended(int arg0) {
 		Log.i(TAG, "connection suspended.");
-		
 	}
 
 }

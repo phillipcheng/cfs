@@ -1,11 +1,13 @@
-package cy.cfs.googledrive;
+package cy.cfs.op;
 
 import java.io.File;
 
-import android.util.Log;
-
 import cy.cfs.CFSInstance;
 import cy.cfs.DriveOp;
+import cy.cfs.OpFactory;
+
+import android.util.Log;
+
 
 public class AddFileOp extends DriveOp{
 	
@@ -49,12 +51,12 @@ public class AddFileOp extends DriveOp{
 		String dirName = requestFileName.substring(0, requestFileName.lastIndexOf(File.separator));
 		String fileName = requestFileName.substring(dirName.length());
 		
-		String currentFileOpId = ((GDCFSInstance)getCfsInst()).getFileMap().putIfAbsent(requestFileName, getId());
-		if (currentFileOpId==null || getId().equals(currentFileOpId)){
+		String currentFileOpId = getCfsInst().getFileMap().putIfAbsent(requestFileName, WORKING_MARK+getId());
+		if (currentFileOpId==null || (WORKING_MARK+getId()).equals(currentFileOpId)){
 			//i am/My Team is working on this
-			String currentFolderOpId = ((GDCFSInstance)this.getCfsInst()).getDirMap().putIfAbsent(dirName, getId());
+			String currentFolderOpId = getCfsInst().getDirMap().putIfAbsent(dirName, WORKING_MARK+getId());
 			
-			if (currentFolderOpId==null || getId().equals(currentFolderOpId)){
+			if (currentFolderOpId==null || (WORKING_MARK+getId()).equals(currentFolderOpId)){
 				//i am/My Team is working on this
 				//change to a AddDirOp
 				AddDirOp addDir = new AddDirOp(getCfsInst());
@@ -62,22 +64,24 @@ public class AddFileOp extends DriveOp{
 				addDir.setFileName(dirName);
 				addDir.insertCallback(this);
 				getCfsInst().submit(addDir);
-			}else if (currentFolderOpId.startsWith(File.separator)){
+			}else if (currentFolderOpId.startsWith(WORKING_MARK)){
 				//someone is working on my dependency, i will try later
 				Log.i(TAG, "someone is working on my dependency." + dirName + ":" + currentFolderOpId);
 				getCfsInst().submit(this);
 			}else{
-				GDCreateFileInFolderOp gdcfifop = new GDCreateFileInFolderOp(requestFileName, 
-						currentFolderOpId, fileName, getMimeType(), getBinaryContent(), (GDCFSInstance) getCfsInst());
-				gdcfifop.addCallback(new GDCreateItemCallback(requestFileName, (GDCFSInstance) getCfsInst()));
-				gdcfifop.addCallbackList(getCallback());
-				getCfsInst().submit(gdcfifop);
+				DriveOp cfifop = OpFactory.getCreateFileInFolderOp(requestFileName, 
+						currentFolderOpId, fileName, getMimeType(), getBinaryContent(), getCfsInst());
+				cfifop.addCallbackList(getCallback());
+				getCfsInst().submit(cfifop);
 			}
-		}else if (currentFileOpId.startsWith(File.separator)){
-			//some one is working on that, i do not need to do this
+		}else if (currentFileOpId.startsWith(WORKING_MARK)){
+			//some one is working on that, i do not need to do this, since there is no follow up tasks
 			Log.i(TAG, "someone working on this." + requestFileName + ":" + currentFileOpId);
+		}else if (currentFileOpId.startsWith(ERROR_MAKE)){
+			//some one found there is error there, so i do not work on this again.
+			Log.e(TAG, String.format("error found:%s for %s", currentFileOpId, requestFileName));
 		}else{
-			//already has the file no create.
+			//already has the file create.
 			Log.i(TAG, "already done:" + requestFileName + ":" + currentFileOpId);
 		}
 	}

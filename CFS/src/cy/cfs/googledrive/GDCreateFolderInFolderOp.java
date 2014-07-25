@@ -1,94 +1,140 @@
 package cy.cfs.googledrive;
 
-import java.util.List;
 
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.drive.Drive;
 import com.google.android.gms.drive.DriveFolder;
 import com.google.android.gms.drive.DriveId;
+import com.google.android.gms.drive.Metadata;
 import com.google.android.gms.drive.MetadataChangeSet;
 import com.google.android.gms.drive.DriveApi.DriveIdResult;
+import com.google.android.gms.drive.DriveApi.MetadataBufferResult;
 import com.google.android.gms.drive.DriveFolder.DriveFolderResult;
 import com.google.android.gms.drive.events.ChangeEvent;
 import com.google.android.gms.drive.events.DriveEvent.Listener;
+import com.google.android.gms.drive.query.Filters;
+import com.google.android.gms.drive.query.Query;
+import com.google.android.gms.drive.query.SearchableField;
 
+import cy.cfs.CFSInstance;
 import cy.cfs.DriveOp;
-import cy.cfs.OpCallback;
 
 public class GDCreateFolderInFolderOp extends DriveOp{
 	
 	protected static final String TAG = "GoogleDriveCreateFolderInFolderOp";
 	
-	private String requestFileName;
+	private String requestFolderName;//this is the full path
 	private String parentResourceId;
 	private String folderName;
-	private GDCFSInstance cfsIns;
 	
-	public GDCreateFolderInFolderOp(String requestFileName, String parentResourceId, 
-			String folderName, GDCFSInstance gdcfsIns){
+	private DriveId folderDriveId;
+	
+	public GDCreateFolderInFolderOp(String requestFolderName, String parentResourceId, 
+			String folderName, CFSInstance gdcfsIns){
 		super(gdcfsIns);
-		this.requestFileName = requestFileName;
+		this.requestFolderName = requestFolderName;
 		this.parentResourceId = parentResourceId;
 		this.folderName = folderName;
-		this.cfsIns = gdcfsIns;
 	}
+	
 	
 	@Override
 	public void myRun(){
-		if (parentResourceId==null){
-			MetadataChangeSet changeSet = new MetadataChangeSet.Builder().setTitle(folderName).build();
-			Drive.DriveApi.getRootFolder(cfsIns.getGoogleApiClient()).
-					createFolder(cfsIns.getGoogleApiClient(), changeSet).
-					setResultCallback(callback);
+		if (TextUtils.isEmpty(parentResourceId)){
+			query();
 		}else{
-			Drive.DriveApi.fetchDriveId(cfsIns.getGoogleApiClient(), parentResourceId)
+			//get parent driveId
+			Drive.DriveApi.fetchDriveId(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), parentResourceId)
     			.setResultCallback(idCallback);
 		}
 	}
-	
-	final ResultCallback<DriveIdResult> idCallback = new ResultCallback<DriveIdResult>() {
+    
+    final ResultCallback<DriveIdResult> idCallback = new ResultCallback<DriveIdResult>() {
         @Override
         public void onResult(DriveIdResult result) {
             if (!result.getStatus().isSuccess()) {
                 Log.e(TAG, "Cannot find DriveId. Are you authorized to view this file?");
                 return;
             }
-            DriveFolder folder = Drive.DriveApi
-                    .getFolder(cfsIns.getGoogleApiClient(), result.getDriveId());
-            MetadataChangeSet changeSet = new MetadataChangeSet.Builder()
-                    .setTitle(folderName).build();
-            folder.createFolder(cfsIns.getGoogleApiClient(), changeSet)
-                    .setResultCallback(callback);
+            folderDriveId = result.getDriveId();
+            query();
+        }
+    };
+	
+    private void query(){
+    	Query query = new Query.Builder()
+			.addFilter(Filters.eq(SearchableField.TITLE, folderName))
+			.build();
+    	if (TextUtils.isEmpty(parentResourceId)){
+			//add folder to root
+			Drive.DriveApi.query(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), query)
+	        	.setResultCallback(queryCallback);
+    	}else{
+    		DriveFolder folder = Drive.DriveApi
+                    .getFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), folderDriveId);
+            folder.queryChildren(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), query)
+                    .setResultCallback(queryCallback);
+    	}
+    }
+    
+	final private ResultCallback<MetadataBufferResult> queryCallback = new
+            ResultCallback<MetadataBufferResult>() {
+        @Override
+        public void onResult(MetadataBufferResult result) {
+            if (!result.getStatus().isSuccess()) {
+                Log.e(TAG, "Problem while retrieving results");
+                return;
+            }
+            if (result.getMetadataBuffer().getCount()>0){
+            	Metadata md= result.getMetadataBuffer().get(0);
+            	String resourceId = md.getDriveId().getResourceId();
+            	Log.i(TAG, String.format("%s exists, resourceId is:%s with title:%s", 
+            			requestFolderName, resourceId, md.getTitle()));
+            	finalCallback(true, false, requestFolderName, resourceId);
+            }else{
+            	addFolder();
+            }
         }
     };
     
-	final ResultCallback<DriveFolderResult> callback = new ResultCallback<DriveFolderResult>() {
+    private void addFolder(){
+    	if (TextUtils.isEmpty(parentResourceId)){
+			MetadataChangeSet changeSet = new MetadataChangeSet.Builder().setTitle(folderName).build();
+			Drive.DriveApi.getRootFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient()).
+					createFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), changeSet).
+					setResultCallback(addFolderCallback);
+		}else{
+			//add folder to parent
+            DriveFolder folder = Drive.DriveApi
+                    .getFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), folderDriveId);
+            MetadataChangeSet changeSet = new MetadataChangeSet.Builder()
+                    .setTitle(folderName).build();
+            folder.createFolder(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), changeSet)
+                    .setResultCallback(addFolderCallback);
+		}
+    }
+
+	final ResultCallback<DriveFolderResult> addFolderCallback = new ResultCallback<DriveFolderResult>() {
         @Override
         public void onResult(DriveFolderResult result) {
             if (!result.getStatus().isSuccess()) {
                 Log.e(TAG, "Error while trying to create the folder");
-                List<OpCallback> cbList = getCallback();
-	            for (OpCallback cb: cbList){
-	            	cb.onFailure(result.getDriveFolder().getDriveId().getResourceId());
-	            }
+                finalCallback(false, false, requestFolderName, null);
             }else{
             	Log.i(TAG, "Created a folder: " + result.getDriveFolder().getDriveId());
-            	result.getDriveFolder().addChangeListener(cfsIns.getGoogleApiClient(), (new Listener<ChangeEvent>() {
+            	result.getDriveFolder().addChangeListener(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), (new Listener<ChangeEvent>() {
             	    @Override
             	    public void onEvent(ChangeEvent event) {
             	    	String resourceId = event.getDriveId().getResourceId();
             	    	if (resourceId!=null){
 	            	    	Log.i(TAG, "get the resourcid: " + resourceId);
-	        	            List<OpCallback> cbList = GDCreateFolderInFolderOp.this.getCallback();
-	        	            for (OpCallback cb: cbList){
-	        	            	cb.onSuccess(resourceId);
-	        	            }
+	        	            finalCallback(true, false, requestFolderName, resourceId);
             	    	}
             	    }
             	}));
-	            
             }
         }
     };

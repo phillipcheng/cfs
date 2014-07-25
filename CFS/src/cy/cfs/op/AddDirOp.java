@@ -1,14 +1,15 @@
-package cy.cfs.googledrive;
+package cy.cfs.op;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
 
-import android.util.Log;
-
 import cy.cfs.CFSInstance;
 import cy.cfs.DriveOp;
+import cy.cfs.OpFactory;
+
+import android.util.Log;
 
 public class AddDirOp extends DriveOp{
 	
@@ -41,25 +42,31 @@ public class AddDirOp extends DriveOp{
 			i++;
 			preString = preString + File.separatorChar + t; 
 			
-			String currentOpId = ((GDCFSInstance)this.getCfsInst()).getDirMap().putIfAbsent(preString, getId());
-			if (currentOpId==null || getId().equals(currentOpId)){
+			String currentOpId = getCfsInst().getDirMap().putIfAbsent(preString, WORKING_MARK + getId());
+			if (currentOpId==null || (WORKING_MARK+getId()).equals(currentOpId)){
 				//I am/My Team is working on this
-				GDCreateFolderInFolderOp gdcfifop = new GDCreateFolderInFolderOp(
-						preString, preResourceId, t, (GDCFSInstance) getCfsInst());
-				gdcfifop.addCallback(new GDCreateItemCallback(preString, (GDCFSInstance) getCfsInst()));
+				DriveOp cfifop = OpFactory.getCreateFolderInFolderOp(preString, 
+						preResourceId, t, getCfsInst());
 				if (i<tokens.size()-1){
-					gdcfifop.addCallback(this);
+					cfifop.addCallback(this);
 				}else{
 					//last
-					gdcfifop.addCallbackList(getCallback());
+					cfifop.addCallbackList(getCallback());
 				}
-				getCfsInst().submit(gdcfifop);
+				getCfsInst().submit(cfifop);
 				break;//since process is async, we need to put follow-up actions in the callback.
-			}else if (currentOpId.startsWith(File.separator)){
-				//others is working on my dependency, i will wait for him
-				getCfsInst().submit(this);
-				Log.i(TAG, "someone is working on my dependency:" + dirName + ":" + currentOpId);
+			}else if (currentOpId.startsWith(WORKING_MARK)){
+				if (i<tokens.size()-1){
+					//others is working on my dependency, there is more work, i will wait for him
+					getCfsInst().submit(this);
+					Log.i(TAG, "someone is working on my dependency:" + dirName + ":" + currentOpId);
+				}else{
+					//all i need to do is done, no more work
+				}
 				break;
+			}else if (currentOpId.startsWith(ERROR_MAKE)){
+				//found error so i do not work on this any more
+				Log.e(TAG, String.format("found error %s for %s", currentOpId, preString));
 			}else{
 				//already has the folder no create
 				preResourceId = currentOpId;

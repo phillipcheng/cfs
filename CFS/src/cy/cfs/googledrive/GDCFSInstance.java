@@ -32,17 +32,6 @@ public class GDCFSInstance extends CFSInstance{
 
 	private transient Context context;
 	
-	//virtual file name map to cloud specific resource id, the display name in the cloud the same as virtual file name
-	private ConcurrentHashMap<String, String> dirMap = new ConcurrentHashMap<String, String>();//since i need null value for DriveId placeholder
-	private ConcurrentHashMap<String, String> fileMap = new ConcurrentHashMap<String, String>();
-	
-	public ConcurrentHashMap<String, String> getDirMap(){
-		return dirMap;
-	}
-	public ConcurrentHashMap<String, String> getFileMap(){
-		return fileMap;
-	}
-	
 	public GDCFSInstance(CFSConf conf, Context context) {
 		super(conf);
 		this.context = context;
@@ -52,6 +41,7 @@ public class GDCFSInstance extends CFSInstance{
 	@Override
 	public boolean isConnected() {
 		if (mGoogleApiClient!=null && mGoogleApiClient.isConnected()){
+			setStatus(CONNECTED);
 			return true;
 		}
 		return false;
@@ -59,15 +49,16 @@ public class GDCFSInstance extends CFSInstance{
 
 	@Override
 	public void connect() {
-		if (mGoogleApiClient!=null && mGoogleApiClient.isConnected()){
-			return;
-		}else{
-			//fire event
-			Intent intent = new Intent();
-			intent.setAction(GDConnectActivity.CFS_ACTION_GOOGLEAPICONNECT);
-			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-			intent.putExtra(GDConnectActivity.INTENT_EXTRA_CFS_INSTANCE_ID, getConf().getId());
-			context.startActivity(intent);
+		if (!isConnected()){
+			if (!CONNECTING.equals(getStatus())){
+				//fire event
+				Intent intent = new Intent();
+				intent.setAction(GDConnectActivity.CFS_ACTION_GOOGLEAPICONNECT);
+				intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				intent.putExtra(INTENT_EXTRA_CFS_INSTANCE_ID, getConf().getId());
+				context.startActivity(intent);
+				setStatus(CONNECTING);
+			}
 		}
 	}
 }
