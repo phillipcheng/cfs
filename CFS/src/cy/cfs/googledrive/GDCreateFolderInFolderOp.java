@@ -24,25 +24,31 @@ import cy.cfs.DriveOp;
 
 public class GDCreateFolderInFolderOp extends DriveOp{
 	
-	protected static final String TAG = "GoogleDriveCreateFolderInFolderOp";
-	
 	private String requestFolderName;//this is the full path
 	private String parentResourceId;
 	private String folderName;
-	
 	private DriveId folderDriveId;
+	
 	
 	public GDCreateFolderInFolderOp(String requestFolderName, String parentResourceId, 
 			String folderName, CFSInstance gdcfsIns){
-		super(gdcfsIns);
+		super(gdcfsIns, requestFolderName);
 		this.requestFolderName = requestFolderName;
 		this.parentResourceId = parentResourceId;
 		this.folderName = folderName;
 	}
 	
+	public String toString(){
+		String str = super.toString();
+		return str + ", requestFolderName:" + requestFolderName
+				+ ",parentResourceId:" + parentResourceId
+				+ ",folderName:" + folderName;
+	}
+	
 	
 	@Override
-	public void myRun(){
+	public void run(){
+		Log.i(TAG, "start to run:" + this + "\n");
 		if (TextUtils.isEmpty(parentResourceId)){
 			query();
 		}else{
@@ -56,7 +62,8 @@ public class GDCreateFolderInFolderOp extends DriveOp{
         @Override
         public void onResult(DriveIdResult result) {
             if (!result.getStatus().isSuccess()) {
-                Log.e(TAG, "Cannot find DriveId. Are you authorized to view this file?");
+                Log.e(TAG, "Cannot find DriveId:"+result.getStatus().toString());
+                finalCallback(false, false, requestFolderName, result.getStatus().toString());
                 return;
             }
             folderDriveId = result.getDriveId();
@@ -86,6 +93,7 @@ public class GDCreateFolderInFolderOp extends DriveOp{
         public void onResult(MetadataBufferResult result) {
             if (!result.getStatus().isSuccess()) {
                 Log.e(TAG, "Problem while retrieving results");
+                finalCallback(false, false, requestFolderName, result.getStatus().toString());
                 return;
             }
             if (result.getMetadataBuffer().getCount()>0){
@@ -97,6 +105,7 @@ public class GDCreateFolderInFolderOp extends DriveOp{
             }else{
             	addFolder();
             }
+            result.getMetadataBuffer().close();
         }
     };
     
@@ -132,6 +141,9 @@ public class GDCreateFolderInFolderOp extends DriveOp{
             	    	if (resourceId!=null){
 	            	    	Log.i(TAG, "get the resourcid: " + resourceId);
 	        	            finalCallback(true, false, requestFolderName, resourceId);
+            	    	}else{
+            	    		Log.e(TAG, "no resourceId found for:" + event);
+            	    		finalCallback(false, false, requestFolderName, event.toString());
             	    	}
             	    }
             	}));
@@ -139,4 +151,19 @@ public class GDCreateFolderInFolderOp extends DriveOp{
         }
     };
 
+    @Override
+    public boolean equals(Object o){
+    	if (o instanceof GDCreateFolderInFolderOp){
+    		GDCreateFolderInFolderOp adOp = (GDCreateFolderInFolderOp)o;
+    		if (this.requestFolderName.equals(adOp.requestFolderName) &&
+    				this.parentResourceId.equals(adOp.parentResourceId)&&
+    				this.folderName.equals(adOp.folderName)){
+				return true;
+			}else{
+				return false;
+			}
+    	}else{
+    		return false;
+    	}
+    }
 }

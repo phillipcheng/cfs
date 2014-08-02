@@ -16,8 +16,6 @@ import cy.cfs.DriveOp;
 
 public class ODCreateFolderInFolderOp extends DriveOp{
 	
-	protected static final String TAG = "ODCreateFolderInFolderOp";
-	
     private static final String HOME_FOLDER = "me/skydrive";
 	
 	private String requestFolderName; //the full path folder name
@@ -27,7 +25,7 @@ public class ODCreateFolderInFolderOp extends DriveOp{
 	
 	public ODCreateFolderInFolderOp(String requestFolderName, String parentResourceId, 
 			String folderName, CFSInstance cfsIns){
-		super(cfsIns);
+		super(cfsIns, requestFolderName);
 		this.requestFolderName = requestFolderName;
 		this.parentResourceId = parentResourceId;
 		this.folderName = folderName;
@@ -36,8 +34,16 @@ public class ODCreateFolderInFolderOp extends DriveOp{
 		}
 	}
 	
+	public String toString(){
+		String str = super.toString();
+		return str + ", requestFolderName:" + requestFolderName
+				+ ",parentResourceId:" + parentResourceId
+				+ ",folderName:" + folderName
+				+ ",parentFolderPath:" + parentFolderPath;
+	}
+	
 	@Override
-	public void myRun(){
+	public void run(){
 		String path = "";
 		if (TextUtils.isEmpty(parentResourceId)){
 			path = HOME_FOLDER + "/files";
@@ -78,7 +84,7 @@ public class ODCreateFolderInFolderOp extends DriveOp{
 	                    }else{
 	                    	//update the cache
 	                    	if (parentFolderPath!=null){
-	                    		cfsCallback(true, false, parentFolderPath+name, obj.getString(JsonKeys.ID));
+	                    		sysCallback(true, false, parentFolderPath+name, obj.getString(JsonKeys.ID));
 	                    	}
 	                    }
 	                }
@@ -130,4 +136,20 @@ public class ODCreateFolderInFolderOp extends DriveOp{
             }
        }
    };
+   
+   @Override
+   public boolean equals(Object o){
+   	if (o instanceof ODCreateFolderInFolderOp){
+   		ODCreateFolderInFolderOp adOp = (ODCreateFolderInFolderOp)o;
+   		if (this.requestFolderName.equals(adOp.requestFolderName) &&
+   				this.parentResourceId.equals(adOp.parentResourceId)&&
+   				this.folderName.equals(adOp.folderName)){
+				return true;
+			}else{
+				return false;
+			}
+   	}else{
+   		return false;
+   	}
+   }
 }

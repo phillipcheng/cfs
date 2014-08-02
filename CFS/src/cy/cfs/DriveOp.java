@@ -9,34 +9,35 @@ import android.util.Log;
 
 public abstract class DriveOp implements Runnable, CallbackOp{
 	
-	protected static final String TAG = "DriveOp";
+	protected static final String TAG = "CFS";
+	protected static final String STATUSTAG = "CFSStatus";
 	
+	//following are marks might found on the entry of the dirMap and fileMap
 	public static final String WORKING_MARK="working:";
-	public static final String ERROR_MAKE="error:";
+	public static final String ERROR_MARK="error:";
+	public static final String EMPTY_MARK="empty:";
 	
-	public static int OP_ADD_FILE=1;
-	public static int OP_GET_FILE=2;
-	public static int OP_ADD_DIR=3;
-	public static int OP_DEL_FILE=4;
-	public static int OP_DEL_DIR=5;
-	
-	//
-	private CFSInstance cfsInst;
-	public CFSInstance getCfsInst() {
-		return cfsInst;
+	protected CFSInstance cfsInst;
+	private String id;	
+	private Object request;//this is the request
+
+	public Object getRequest() {
+		return request;
+	}
+
+	public String toString(){
+		StringBuffer sb = new StringBuffer();
+		sb.append("\nclass:" + this.getClass());
+		sb.append(",id:" + id);
+		sb.append(",cfs conf id:" + cfsInst.getId());
+		sb.append(", \n callback list:" + getCallback());
+		return sb.toString();
 	}
 	
-	//
-	private String id;
-	public String getId() {
-		return id;
-	}
-	public void setId(String id) {
-		this.id = id;
-	}
-	public DriveOp(CFSInstance cfsInstance){
+	public DriveOp(CFSInstance cfsInstance, Object request){
 		this.cfsInst = cfsInstance;
 		id = File.separator + (new Date()).getTime();
+		this.request = request;
 	}
 	
 	//callback in the calling order, only the last can be asynchronous, the other should be synchronous
@@ -54,62 +55,69 @@ public abstract class DriveOp implements Runnable, CallbackOp{
 	public void addCallbackList(List<CallbackOp> callbacks) {
 		this.callbackList.addAll(callbacks);
 	}
-
-
-	
-	public abstract void myRun();
-	
-	@Override
-	public void run(){
-		try{
-			if (cfsInst.isConnected()){
-				myRun();
-			}else{
-				cfsInst.connect();
-				try {
-					//wait 3 second
-					Thread.sleep(3000);
-				} catch (InterruptedException e) {
-					Log.e(TAG, "", e);
-				}
-				cfsInst.submit(this);
-			}
-		}catch(Throwable t){
-			Log.e(TAG, "caught in run", t);
-		}
+	public void insertCallbackList(List<CallbackOp> callbacks){
+		this.callbackList.addAll(0, callbacks);
 	}
-	
-	public void onSuccess(Object request, Object result){
+
+	@Override
+	public void onSuccess(Object reqeust, Object result){
 		run();
 	}
-	
+	@Override
 	public void onFailure(Object request, Object result){
-		//
+		//skip run, call back right now
+		usrCallback(false, result);
 	}
 	
-	public void cfsCallback(boolean isSuccess, boolean isFile, String requestFileName, String result){
-		cfsInst.callback(isSuccess, isFile, requestFileName, result);
-	}
+	
 	/**
-     * 
+     * one callback, call system and user, can be separated into 2 below
      * @param isSuccess
      * @param isFile
      * @param result: resourceId or error message
      */
     public void finalCallback(boolean isSuccess, boolean isFile, String requestFileName, String result){
-    	cfsCallback(isSuccess, isFile, requestFileName, result);
+    	Log.i(TAG, String.format("callback success:%b, isFile:%b, requestFile:%s, result:%s", 
+    			isSuccess, isFile, requestFileName, result));
+    	sysCallback(isSuccess, isFile, requestFileName, result);
+    	usrCallback(isSuccess, result);
+    }
+    
+    //system call back, must call
+    public void sysCallback(boolean isSuccess, boolean isFile, String requestFileName, String result){
+		cfsInst.callback(isSuccess, isFile, requestFileName, result);
+		cfsInst.removeWorker(this);
+		Log.d(STATUSTAG, "cfsInst:\n" + cfsInst.toString());
+	}
+    
+	/**
+     * user call back
+     * @param isSuccess
+     * @param result: resourceId or error message
+     */
+    public void usrCallback(boolean isSuccess, Object result){
+    	CallbackOp cbOp;
     	if (isSuccess){
     		List<CallbackOp> cbList = getCallback();
-            for (CallbackOp cb: cbList){
-            	cb.onSuccess(requestFileName, result);
+            for (int i=0; i<cbList.size(); i++){//using (cb:cbList) will have ConcurrentModificationException
+            	cbOp = cbList.get(i);
+            	cbOp.onSuccess(request, result);
             }
     	}else{
     		//
     		List<CallbackOp> cbList = getCallback();
-            for (CallbackOp cb: cbList){
-            	cb.onFailure(requestFileName, result);
+    		for (int i=0; i<cbList.size(); i++){
+    			cbOp = cbList.get(i);
+            	cbOp.onFailure(request, result);
             }
     	}
     }
-
+    
+    
+	public CFSInstance getCfsInst() {
+		return cfsInst;
+	}	
+	public String getId() {
+		return id;
+	}
 }

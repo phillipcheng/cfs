@@ -8,7 +8,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import android.text.TextUtils;
 import android.util.Log;
 
 import com.microsoft.live.LiveOperation;
@@ -17,34 +16,39 @@ import com.microsoft.live.LiveOperationListener;
 import com.microsoft.live.LiveUploadOperationListener;
 
 import cy.cfs.CFSInstance;
-import cy.cfs.CallbackOp;
 import cy.cfs.DriveOp;
 
 public class ODCreateFileInFolderOp extends DriveOp{
 	
-	protected static final String TAG = "ODCreateFileInFolderOp";
 	
 	private String requestFileName;
 	private String folderResourceId;
 	private String fileName;
-	private String mimeType;
 	private String parentFolderPath;
 	private byte[] binary;
 	
+	public String toString(){
+		String str = super.toString();
+		return str + ", requestFileName:" + requestFileName
+				+ ",folderResourceId:" + folderResourceId
+				+ ",fileName:" + fileName
+				+ ",parentFolderPath:" + parentFolderPath
+				+ ",size:" + binary.length;
+	}
+	
 	public ODCreateFileInFolderOp(String requestFileName, String folderResourceId, 
 			String fileName, String mimeType, byte[] binary, CFSInstance cfsIns){
-		super(cfsIns);
+		super(cfsIns, requestFileName);
 		this.requestFileName = requestFileName;
 		this.folderResourceId = folderResourceId;
 		this.fileName = fileName;
-		this.mimeType = mimeType;
 		this.binary = binary;
 		this.parentFolderPath = requestFileName.substring(0, requestFileName.lastIndexOf(fileName));
 		
 	}
 	
 	@Override
-	public void myRun(){
+	public void run(){
 		String path = folderResourceId + "/files";
 		((ODCFSInstance)getCfsInst()).getClient().getAsync(path, getFileCallback);
 	}
@@ -76,7 +80,7 @@ public class ODCreateFileInFolderOp extends DriveOp{
 	                    	resourceId = obj.getString(JsonKeys.ID);
 	                    }else{
 	                    	//update the cache
-	                    	cfsCallback(true, true, parentFolderPath+name, obj.getString(JsonKeys.ID));
+	                    	sysCallback(true, true, parentFolderPath+name, obj.getString(JsonKeys.ID));
 	                    }
 	                }
 				} catch (JSONException e) {
@@ -125,4 +129,21 @@ public class ODCreateFileInFolderOp extends DriveOp{
             }
         });
 	}
+	
+	 
+    @Override
+    public boolean equals(Object o){
+    	if (o instanceof ODCreateFileInFolderOp){
+    		ODCreateFileInFolderOp adOp = (ODCreateFileInFolderOp)o;
+    		if (this.requestFileName.equals(adOp.requestFileName) &&
+    				this.folderResourceId.equals(adOp.folderResourceId)&&
+    				this.fileName.equals(adOp.fileName)){
+				return true;
+			}else{
+				return false;
+			}
+    	}else{
+    		return false;
+    	}
+    }
 }

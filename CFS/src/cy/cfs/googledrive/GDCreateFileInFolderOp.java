@@ -20,13 +20,12 @@ import com.google.android.gms.drive.query.Filters;
 import com.google.android.gms.drive.query.Query;
 import com.google.android.gms.drive.query.SearchableField;
 
+import cy.cfs.AddDirOp;
 import cy.cfs.CFSInstance;
-import cy.cfs.CallbackOp;
 import cy.cfs.DriveOp;
 
 public class GDCreateFileInFolderOp extends DriveOp{
 	
-	protected static final String TAG = "GDCreateFileInFolderOp";
 	
 	private String requestFileName;
 	private String folderResourceId;
@@ -37,7 +36,7 @@ public class GDCreateFileInFolderOp extends DriveOp{
 	
 	public GDCreateFileInFolderOp(String requestFileName, String folderResourceId, 
 			String fileName, String mimeType, byte[] binary, CFSInstance gdcfsIns){
-		super(gdcfsIns);
+		super(gdcfsIns, requestFileName);
 		this.requestFileName = requestFileName;
 		this.folderResourceId = folderResourceId;
 		this.fileName = fileName;
@@ -45,8 +44,17 @@ public class GDCreateFileInFolderOp extends DriveOp{
 		this.binary = binary;
 	}
 	
+	public String toString(){
+		String str = super.toString();
+		return str + ", requestFileName:" + requestFileName
+				+ ",folderResourceId:" + folderResourceId
+				+ ",fileName:" + fileName
+				+ ",size:" + binary.length;
+	}
+	
 	@Override
-	public void myRun(){
+	public void run(){
+		Log.i(TAG, "start to run:" + this + "\n");
         Drive.DriveApi.fetchDriveId(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), folderResourceId)
         		.setResultCallback(idCallback);
     };
@@ -92,6 +100,7 @@ public class GDCreateFileInFolderOp extends DriveOp{
             	Drive.DriveApi.newContents(((GDCFSInstance)getCfsInst()).getGoogleApiClient())
                 	.setResultCallback(contentsResult);
             }
+            result.getMetadataBuffer().close();
         }
     };
     
@@ -139,4 +148,20 @@ public class GDCreateFileInFolderOp extends DriveOp{
             }
         }
     };
+    
+    @Override
+    public boolean equals(Object o){
+    	if (o instanceof GDCreateFileInFolderOp){
+    		GDCreateFileInFolderOp adOp = (GDCreateFileInFolderOp)o;
+    		if (this.requestFileName.equals(adOp.requestFileName) &&
+    				this.folderResourceId.equals(adOp.folderResourceId)&&
+    				this.fileName.equals(adOp.fileName)){
+				return true;
+			}else{
+				return false;
+			}
+    	}else{
+    		return false;
+    	}
+    }
 }
