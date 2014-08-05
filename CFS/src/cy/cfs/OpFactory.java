@@ -1,9 +1,11 @@
 package cy.cfs;
 
+import cy.cfs.googledrive.GDCFSInstance;
 import cy.cfs.googledrive.GDCreateFileInFolderOp;
 import cy.cfs.googledrive.GDCreateFolderInFolderOp;
 import cy.cfs.googledrive.GDGetFileInFolderOp;
 import cy.cfs.googledrive.GDGetFolderInFolderOp;
+import cy.cfs.onedrive.ODCFSInstance;
 import cy.cfs.onedrive.ODCreateFileInFolderOp;
 import cy.cfs.onedrive.ODCreateFolderInFolderOp;
 import cy.cfs.onedrive.ODGetFileInFolderOp;
@@ -11,6 +13,15 @@ import cy.cfs.onedrive.ODGetFolderInFolderOp;
 
 public class OpFactory {
 	
+	public static CFSInstance getCFSInstance(String id, String vendor, String userId){
+		CFSInstance cfsInstance = null;
+		if (CFSInstance.VENDOR_GOOGLE_DRIVE.equals(vendor)){
+			cfsInstance = new GDCFSInstance(id, userId);
+		}else if (CFSInstance.VENDOR_MICROSOFT.equals(vendor)){
+			cfsInstance = new ODCFSInstance(id, userId);
+		}
+		return cfsInstance;
+	}
 	public static DriveOp getCreateFolderInFolderOp(String requestFolderName, String parentFolderResourceId, 
 			String folderName, CFSInstance cfsInst){
 		if (CFSInstance.VENDOR_GOOGLE_DRIVE.equals(cfsInst.getVendor())){

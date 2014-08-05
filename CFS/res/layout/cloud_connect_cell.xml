@@ -14,49 +14,87 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-<TableLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:divider="@drawable/vertical_divider_1"
-    android:orientation="horizontal"
-    android:showDividers="middle" >
-	 <TableRow
-	            android:id="@+id/tableRow1"
-	            android:layout_width="wrap_content"
-	            android:layout_height="wrap_content" >
-	       <TextView
-	           android:id="@+id/txtCFSID"
-	           android:layout_width="wrap_content"
-	           android:layout_height="wrap_content"
-	           android:text=" id " />
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical">
 	
+	 <LinearLayout
+	            android:id="@+id/tableRow1"
+	            android:layout_width="fill_parent"
+	            android:layout_height="40dp" 
+	             android:orientation="horizontal">
+
+	     <CheckBox
+	         android:id="@+id/cbCfs"
+	         android:layout_width="40dp"
+	         android:layout_height="40dp"
+	         android:text=" id " />
+	     
 	       <TextView
 	           android:id="@+id/txtEmailID"
-	           android:layout_width="wrap_content"
-	           android:layout_height="wrap_content"
+	           android:layout_width="178dp"
+	           android:layout_height="40dp"
 	           android:text=" email " />
-	
-	       <TextView
-	           android:id="@+id/txtRootDir"
-	           android:layout_width="wrap_content"
-	           android:layout_height="wrap_content"
-	           android:text=" rootdir " />
-	  </TableRow>
-	  
-	  <TableRow
-	            android:id="@+id/tableRow2"
-	            android:layout_width="wrap_content"
-	            android:layout_height="wrap_content" >
+
 	       <TextView
 	           android:id="@+id/txtStatus"
-	           android:layout_width="wrap_content"
-	           android:layout_height="wrap_content"
+	           android:layout_width="88dp"
+	           android:layout_height="40dp"
 	           android:text=" status " />
-	
+
+	  </LinearLayout>
+	  <LinearLayout
+	            android:id="@+id/tableRow2"
+	            android:layout_width="fill_parent"
+	            android:layout_height="40dp" 
+	             android:orientation="horizontal">
+	       <TextView
+	           android:id="@+id/txtVendor"
+	           android:layout_width="88dp"
+	           android:layout_height="40dp"
+	           android:text=" status " />
+
 	       <Button
 	           android:id="@+id/btnConnect"
-	           android:layout_width="wrap_content"
-	           android:layout_height="wrap_content"
+	           android:layout_width="60dp"
+	           android:layout_height="40dp"
 	           android:text="Go" />
-  		</TableRow>
-</TableLayout>
+	 </LinearLayout>
+	 
+	  <LinearLayout
+	            android:id="@+id/tableRow3"
+	            android:layout_width="fill_parent"
+	            android:layout_height="40dp" 
+	            android:orientation="horizontal">
+		  
+	      <TextView
+	          android:id="@+id/lblRootDir"
+	          android:layout_width="60dp"
+	          android:layout_height="40dp"
+	          android:text="RootDir:" />
+ 		  
+	      <EditText
+	          android:id="@+id/txtRootDir"
+	          android:layout_width="105dp"
+	          android:layout_height="40dp" 
+	          android:singleLine="true">
+				<requestFocus />
+	      </EditText>
+
+	      
+	      <TextView
+	          android:id="@+id/lblMatchRule"
+	          android:layout_width="50dp"
+	          android:layout_height="40dp"
+	          android:text="Rule:" />
+
+	      <EditText
+	          android:id="@+id/txtMatchRule"
+	          android:layout_width="126dp"
+	          android:layout_height="40dp" 
+	          android:singleLine="true"/>
+  		 
+  		</LinearLayout>
+
+</LinearLayout>

@@ -5,6 +5,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.apache.commons.collections.set.ListOrderedSet;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.app.Activity;
 import android.content.Context;
@@ -17,8 +19,10 @@ public abstract class CFSInstance {
 	protected static final String TAG = "CFS";
 	
 	public static final String VENDOR_GOOGLE_DRIVE="google.drive";
-	public static final String VENDOR_DROPBOX="dropbox";
 	public static final String VENDOR_MICROSOFT="ms.onedrive";
+	public static final String VENDOR_DROPBOX="dropbox";
+	
+	public static String[] vendors = new String[]{VENDOR_GOOGLE_DRIVE, VENDOR_MICROSOFT, VENDOR_DROPBOX};
 	
 	public static final String UNCONNECTED="disconnected";
 	public static final String CONNECTING="connecting";
@@ -30,6 +34,14 @@ public abstract class CFSInstance {
 	public static final String INTENT_EXTRA_CFS_INSTANCE_ID="cfsInstanceId";
 	public static final String INTENT_EXTRA_CFS_USER_ID="userId";
 	
+
+	public static final String ID_KEY="id";
+	public static final String VENDOR_KEY="vendor";
+	public static final String ACCOUNT_KEY="account";
+	public static final String ROOT_FOLDER_KEY="rootFolder";
+	public static final String MATCH_RULE="matchRule";
+	
+	private boolean checked;
 	private String id;
 	private String vendor;
 	private String account;//usually email address
@@ -37,17 +49,52 @@ public abstract class CFSInstance {
 	private String rootFolder;
 	private long used; //in bytes
 	private String status=UNCONNECTED;
+	private String matchRule;
+	
 	private String userId;
 	
 	private transient ExecutorService exeService = Executors.newFixedThreadPool(2);
 	private transient ListOrderedSet pendingList = new ListOrderedSet();
 	private transient Context ctxt;//save for future intent firing, should be not necessary
+	private transient ConnectionsGridViewAdapter adapter;
 	
 	//virtual file/dir name map to cloud specific resource id cache
 	private ConcurrentHashMap<String, String> dirMap = new ConcurrentHashMap<String, String>();
 	private ConcurrentHashMap<String, String> fileMap = new ConcurrentHashMap<String, String>();
 	//worker map
 	private ConcurrentHashMap<String, DriveOp> workerMap = new ConcurrentHashMap<String, DriveOp>();
+	
+	public static int getIdxVendor(String vendor){
+		for (int i=0; i<vendors.length; i++){
+			if (vendors[i].equals(vendor)){
+				return i;
+			}
+		}
+		return -1;
+	}
+	
+	public JSONObject toJson() throws JSONException{
+		JSONObject obj = new JSONObject();
+		obj.put(ID_KEY, id);
+		obj.put(VENDOR_KEY, this.vendor);
+		obj.put(ACCOUNT_KEY, this.account);
+		obj.put(ROOT_FOLDER_KEY, this.rootFolder);
+		obj.put(MATCH_RULE, this.matchRule);
+		return obj;
+	}
+	
+	public static CFSInstance fromJson(JSONObject obj, String userId) throws JSONException{
+		String vendor = obj.getString(VENDOR_KEY);
+		String id = obj.getString(ID_KEY);
+		CFSInstance cfs = OpFactory.getCFSInstance(id, vendor, userId);
+		if (obj.has(ACCOUNT_KEY))
+			cfs.setAccount(obj.getString(ACCOUNT_KEY));
+		if (obj.has(ROOT_FOLDER_KEY))
+			cfs.setRootFolder(obj.getString(ROOT_FOLDER_KEY));
+		if (obj.has(MATCH_RULE))
+			cfs.setMatchRule(obj.getString(MATCH_RULE));
+		return cfs;
+	}
 	
 	public String toString(){
 		StringBuffer sb = new StringBuffer();
@@ -58,6 +105,8 @@ public abstract class CFSInstance {
 		sb.append(",rootFolder:" + rootFolder);
 		sb.append(",used:" + used);
 		sb.append(",status:" + status);
+		sb.append(",matchRule:" + matchRule);
+		
 		
 		sb.append("\n dirMap:" + dirMap);
 		sb.append("\n fileMap:" + fileMap);
@@ -77,19 +126,43 @@ public abstract class CFSInstance {
 		return workerMap.get(id);
 	}
 	
-	public CFSInstance(String id, String vendor, String account, long quota, String rootFolder, String userId){
+	public CFSInstance(String id, String userId){
 		this.id = id;
-		this.vendor = vendor;
-		this.account = account;
-		this.quota = quota;
-		this.setRootFolder(rootFolder);
-		this.used = 0;
 		this.userId = userId;
 	}
 
 	public abstract boolean isConnected();
-	public abstract void connect(Activity activity);//real connect
-	public abstract void disconnect();
+	public abstract void myConnect(Activity activity);//real connect
+	public abstract void myDisconnect();
+	
+	//call back after cfs get connected
+	protected void startPendingOp(){
+		synchronized(pendingList){
+			for (Object op : this.pendingList){
+				this.submit((DriveOp) op);
+			}
+		}
+	}
+
+	//I am connected, called by my sub classes
+	protected void getConnected(){
+		Log.i(TAG, "connection connected.");
+		setStatus(CFSInstance.CONNECTED);
+        //fire all pending operations
+        startPendingOp();
+        if (adapter!=null)
+        	adapter.notifyDataSetChanged();
+	}
+	
+	public void connect(Activity activity, ConnectionsGridViewAdapter adapter){
+		myConnect(activity);
+		this.adapter = adapter;
+	}
+	
+	public void disconnect(){
+		myDisconnect();//this is synchronous
+        setStatus(CFSInstance.UNCONNECTED);
+	}
 	
 	//to trigger the manual connection
 	private void showConnectActivity(Context context){
@@ -133,14 +206,6 @@ public abstract class CFSInstance {
 		}
 	}
 	
-	//call back after cfs get connected
-	protected void startPendingOp(){
-		synchronized(pendingList){
-			for (Object op : this.pendingList){
-				this.submit((DriveOp) op);
-			}
-		}
-	}
 	//newOp is working on the fileName
 	public void replaceOp(boolean isFile, String fileName, DriveOp newOp, String currentOpId){
 		String oldId = null;
@@ -173,6 +238,20 @@ public abstract class CFSInstance {
 		Log.i(TAG, String.format("replace op for file:%s from %s to %s", fileName, oldOp, newOp));
 	}
 	
+	public void callback(boolean isSuccess, boolean isFile, String requestFileName, Object result){
+		if (isSuccess){
+			String resourceId = (String)result;
+			if (isFile){
+				getFileMap().put(requestFileName, resourceId);
+			}else{
+				getDirMap().put(requestFileName, resourceId);
+			}
+			Log.i(TAG, String.format("put to map: isFile %b, %s:%s",  isFile, requestFileName, result));
+		}else{
+			//do nothing, let client retry
+		}
+	}
+	
 	public ConcurrentHashMap<String, String> getDirMap(){
 		return dirMap;
 	}
@@ -191,22 +270,8 @@ public abstract class CFSInstance {
 		return status;
 	}
 
-	public void setStatus(String status) {
+	public void setStatus(final String status) {
 		this.status = status;
-	}
-	
-	public void callback(boolean isSuccess, boolean isFile, String requestFileName, Object result){
-		if (isSuccess){
-			String resourceId = (String)result;
-			if (isFile){
-				getFileMap().put(requestFileName, resourceId);
-			}else{
-				getDirMap().put(requestFileName, resourceId);
-			}
-			Log.i(TAG, String.format("put to map: isFile %b, %s:%s",  isFile, requestFileName, result));
-		}else{
-			//do nothing, let client retry
-		}
 	}
 	
 	public String getId() {
@@ -246,6 +311,22 @@ public abstract class CFSInstance {
 
 	public void setUserId(String userId) {
 		this.userId = userId;
+	}
+
+	public String getMatchRule() {
+		return matchRule;
+	}
+
+	public void setMatchRule(String matchRule) {
+		this.matchRule = matchRule;
+	}
+
+	public boolean isChecked() {
+		return checked;
+	}
+
+	public void setChecked(boolean checked) {
+		this.checked = checked;
 	}
 	
 }

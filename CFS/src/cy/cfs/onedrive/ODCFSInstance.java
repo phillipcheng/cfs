@@ -21,8 +21,9 @@ public class ODCFSInstance extends CFSInstance implements LiveAuthListener {
     private LiveConnectClient client;
 	private LiveAuthClient auth;
 	
-	public ODCFSInstance(String id, String vendor, String account, long quota, String rootFolder, String userId) {
-		super(id, vendor, account, quota, rootFolder, userId);
+	public ODCFSInstance(String id, String userId) {
+		super(id, userId);
+		this.setVendor(CFSInstance.VENDOR_MICROSOFT);
 	}
 
 	//for CFSInstance
@@ -36,25 +37,28 @@ public class ODCFSInstance extends CFSInstance implements LiveAuthListener {
 	}
 
 	@Override
-	public void connect(Activity activity) {
+	public void myConnect(Activity activity) {
 		if (auth==null){
 			auth=new LiveAuthClient(activity, APP_CLIENT_ID);
+			auth.logout(this);
 		}
 		Iterable<String> scopes = Arrays.asList(Scopes.BASICS);
         auth.login(activity, scopes, this);
 	}
+	
 	@Override
-	public void disconnect() {
+	public void myDisconnect() {
 		if (auth!=null){
 			auth.logout(this);
 		}
+		auth=null;
 	}
+	
 	@Override
 	public void onAuthComplete(LiveStatus status, LiveConnectSession session, Object userState) {
         if(status == LiveStatus.CONNECTED) {
             setClient(new LiveConnectClient(session));
-            setStatus(CFSInstance.CONNECTED);
-            startPendingOp();
+            getConnected();
         }else if (status == LiveStatus.NOT_CONNECTED){
             setClient(null);
             setStatus(CFSInstance.UNCONNECTED);
@@ -69,11 +73,14 @@ public class ODCFSInstance extends CFSInstance implements LiveAuthListener {
         setClient(null);  
     }
 	
+	
 	public LiveConnectClient getClient() {
 		return client;
 	}
 	public void setClient(LiveConnectClient client) {
 		this.client = client;
 	}
+
+
 	
 }

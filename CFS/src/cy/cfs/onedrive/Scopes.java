@@ -70,7 +70,6 @@ public final class Scopes {
     
     public final static String[] BASICS = {
         BASIC,
-        SIGNIN,
         SKYDRIVE_UPDATE,
         SKYDRIVE
     };

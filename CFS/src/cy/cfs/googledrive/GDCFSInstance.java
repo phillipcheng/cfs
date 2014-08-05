@@ -1,14 +1,18 @@
 package cy.cfs.googledrive;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.IntentSender.SendIntentException;
 import android.os.Bundle;
 import android.util.Log;
 
+import com.google.android.gms.auth.GoogleAuthUtil;
+import com.google.android.gms.common.AccountPicker;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.drive.Drive;
+import com.google.android.gms.plus.Plus;
 
 import cy.cfs.CFSInstance;
 
@@ -16,21 +20,15 @@ public class GDCFSInstance extends CFSInstance implements
 	GoogleApiClient.ConnectionCallbacks, 
 	GoogleApiClient.OnConnectionFailedListener{
 
-
 	public static final int REQUEST_CODE_RESOLUTION = 1;
-	private Activity activity;
+	public static final int REQUEST_CODE_AUTH = 2;
 	
+	private Activity activity;
 	private transient GoogleApiClient mGoogleApiClient;
-	public GoogleApiClient getGoogleApiClient() {
-		return mGoogleApiClient;
-	}
-
-	public void setGoogleApiClient(GoogleApiClient mGoogleApiClient) {
-		this.mGoogleApiClient = mGoogleApiClient;
-	}
-
-	public GDCFSInstance(String id, String vendor, String account, long quota, String rootFolder, String userId) {
-		super(id, vendor, account, quota, rootFolder, userId);
+	
+	public GDCFSInstance(String id, String userId) {
+		super(id, userId);
+		this.setVendor(CFSInstance.VENDOR_GOOGLE_DRIVE);
 	}
 
 	//for CFSInstance
@@ -44,24 +42,35 @@ public class GDCFSInstance extends CFSInstance implements
 	}
 
 	@Override
-	public void connect(Activity activity) {
+	public void myConnect(Activity activity) {
+		//Account curAccnt = new Account(this.getAccount(), GoogleAuthUtil.GOOGLE_ACCOUNT_TYPE);
+		Intent intent = AccountPicker.newChooseAccountIntent(null, null, 
+	               new String[]{GoogleAuthUtil.GOOGLE_ACCOUNT_TYPE}, false, null, null, null, null);
+	    activity.startActivityForResult(intent, REQUEST_CODE_AUTH);
+	}
+	
+	public void myConnect2(Activity activity){
 		this.activity = activity;
+		Intent intent = activity.getIntent();
+		Log.w(TAG, "intent in login:" + intent.toString());
+		Log.w(TAG, "intent's extra:" + intent.getExtras());
 		if (mGoogleApiClient == null) {
             mGoogleApiClient = new GoogleApiClient.Builder(activity)
                     .addApi(Drive.API)
+                    .addApi(Plus.API)
                     .addScope(Drive.SCOPE_FILE)
+                    .setAccountName(this.getAccount())
                     .addConnectionCallbacks(this)
                     .addOnConnectionFailedListener(this)
                     .build();
         }
-        mGoogleApiClient.connect();
-		
+		mGoogleApiClient.connect();
 	}
 
 	@Override
-	public void disconnect() {
+	public void myDisconnect() {
+		Plus.AccountApi.clearDefaultAccount(mGoogleApiClient);
         mGoogleApiClient.disconnect();
-        setStatus(CFSInstance.UNCONNECTED);
         mGoogleApiClient=null;
 	}
 	
@@ -85,15 +94,20 @@ public class GDCFSInstance extends CFSInstance implements
 
 	@Override
 	public void onConnected(Bundle arg0) {
-		Log.i(TAG, "connection connected.");
-        setStatus(CFSInstance.CONNECTED);
-        //fire all pending operations
-        startPendingOp();
+		getConnected();
 	}
 
 	@Override
 	public void onConnectionSuspended(int arg0) {
 		
+	}
+	
+	public GoogleApiClient getGoogleApiClient() {
+		return mGoogleApiClient;
+	}
+
+	public void setGoogleApiClient(GoogleApiClient mGoogleApiClient) {
+		this.mGoogleApiClient = mGoogleApiClient;
 	}
 
 }
