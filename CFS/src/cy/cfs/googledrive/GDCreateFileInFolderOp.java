@@ -10,17 +10,16 @@ import com.google.android.gms.drive.DriveFolder;
 import com.google.android.gms.drive.DriveId;
 import com.google.android.gms.drive.Metadata;
 import com.google.android.gms.drive.MetadataChangeSet;
-import com.google.android.gms.drive.DriveApi.ContentsResult;
+import com.google.android.gms.drive.DriveApi.DriveContentsResult;
 import com.google.android.gms.drive.DriveApi.DriveIdResult;
 import com.google.android.gms.drive.DriveApi.MetadataBufferResult;
 import com.google.android.gms.drive.DriveFolder.DriveFileResult;
 import com.google.android.gms.drive.events.ChangeEvent;
-import com.google.android.gms.drive.events.DriveEvent.Listener;
+import com.google.android.gms.drive.events.ChangeListener;
 import com.google.android.gms.drive.query.Filters;
 import com.google.android.gms.drive.query.Query;
 import com.google.android.gms.drive.query.SearchableField;
 
-import cy.cfs.AddDirOp;
 import cy.cfs.CFSInstance;
 import cy.cfs.DriveOp;
 
@@ -97,17 +96,17 @@ public class GDCreateFileInFolderOp extends DriveOp{
             	Log.i(TAG, String.format("%s exists with resourceId:%s", requestFileName, resourceId));
             }else{
             	//new content
-            	Drive.DriveApi.newContents(((GDCFSInstance)getCfsInst()).getGoogleApiClient())
+            	Drive.DriveApi.newDriveContents(((GDCFSInstance)getCfsInst()).getGoogleApiClient())
                 	.setResultCallback(contentsResult);
             }
             result.getMetadataBuffer().close();
         }
     };
     
-    final private ResultCallback<ContentsResult> contentsResult = new
-            ResultCallback<ContentsResult>() {
+    final private ResultCallback<DriveContentsResult> contentsResult = new
+            ResultCallback<DriveContentsResult>() {
         @Override
-        public void onResult(ContentsResult result) {
+        public void onResult(DriveContentsResult result) {
             if (!result.getStatus().isSuccess()) {
                 Log.e(TAG, "Error while trying to create new file contents");
                 return;
@@ -118,11 +117,11 @@ public class GDCreateFileInFolderOp extends DriveOp{
                     .setMimeType(mimeType)
                     .build();
             try {
-				result.getContents().getOutputStream().write(binary);
+				result.getDriveContents().getOutputStream().write(binary);
 			} catch (IOException e) {
 				Log.e(TAG, "", e);
 			}
-            folder.createFile(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), changeSet, result.getContents())
+            folder.createFile(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), changeSet, result.getDriveContents())
                     .setResultCallback(fileChangedCallback);
         }
     };
@@ -135,9 +134,9 @@ public class GDCreateFileInFolderOp extends DriveOp{
                 Log.e(TAG, "Error while trying to create the file");
                 finalCallback(false, true, requestFileName, null);
             }else{
-            	result.getDriveFile().addChangeListener(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), (new Listener<ChangeEvent>() {
+            	result.getDriveFile().addChangeListener(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), (new ChangeListener() {
             	    @Override
-            	    public void onEvent(ChangeEvent event) {
+            	    public void onChange(ChangeEvent event) {
             	    	String resourceId = event.getDriveId().getResourceId();
             	    	if (resourceId!=null){
 	            	    	Log.i(TAG, "get the resourcid: " + resourceId);

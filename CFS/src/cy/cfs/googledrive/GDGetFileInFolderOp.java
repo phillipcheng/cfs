@@ -11,7 +11,7 @@ import com.google.android.gms.drive.DriveFile;
 import com.google.android.gms.drive.DriveFolder;
 import com.google.android.gms.drive.DriveId;
 import com.google.android.gms.drive.Metadata;
-import com.google.android.gms.drive.DriveApi.ContentsResult;
+import com.google.android.gms.drive.DriveApi.DriveContentsResult;
 import com.google.android.gms.drive.DriveApi.DriveIdResult;
 import com.google.android.gms.drive.DriveApi.MetadataBufferResult;
 import com.google.android.gms.drive.query.Filters;
@@ -128,14 +128,13 @@ public class GDGetFileInFolderOp extends DriveOp{
         protected Bitmap doInBackground(DriveId... params) {
             Bitmap bmp = null;
             DriveFile file = Drive.DriveApi.getFile(getGoogleApiClient(), params[0]);
-            ContentsResult contentsResult =
-                    file.openContents(getGoogleApiClient(), DriveFile.MODE_READ_ONLY, null).await();
+            DriveContentsResult contentsResult =
+                    file.open(getGoogleApiClient(), DriveFile.MODE_READ_ONLY, null).await();
             if (!contentsResult.getStatus().isSuccess()) {
                 return null;
             }
-            bmp = CloudImageUtil.getBitmap(contentsResult.getContents().getInputStream(), width, height);
-
-            file.discardContents(getGoogleApiClient(), contentsResult.getContents()).await();
+            bmp = CloudImageUtil.getBitmap(contentsResult.getDriveContents().getInputStream(), width, height);
+            contentsResult.getDriveContents().discard(getGoogleApiClient());
             return bmp;
         }
 

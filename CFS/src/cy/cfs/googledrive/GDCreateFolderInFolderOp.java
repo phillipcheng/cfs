@@ -14,7 +14,7 @@ import com.google.android.gms.drive.DriveApi.DriveIdResult;
 import com.google.android.gms.drive.DriveApi.MetadataBufferResult;
 import com.google.android.gms.drive.DriveFolder.DriveFolderResult;
 import com.google.android.gms.drive.events.ChangeEvent;
-import com.google.android.gms.drive.events.DriveEvent.Listener;
+import com.google.android.gms.drive.events.ChangeListener;
 import com.google.android.gms.drive.query.Filters;
 import com.google.android.gms.drive.query.Query;
 import com.google.android.gms.drive.query.SearchableField;
@@ -134,9 +134,9 @@ public class GDCreateFolderInFolderOp extends DriveOp{
                 finalCallback(false, false, requestFolderName, null);
             }else{
             	Log.i(TAG, "Created a folder: " + result.getDriveFolder().getDriveId());
-            	result.getDriveFolder().addChangeListener(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), (new Listener<ChangeEvent>() {
+            	result.getDriveFolder().addChangeListener(((GDCFSInstance)getCfsInst()).getGoogleApiClient(), (new ChangeListener() {
             	    @Override
-            	    public void onEvent(ChangeEvent event) {
+            	    public void onChange(ChangeEvent event) {
             	    	String resourceId = event.getDriveId().getResourceId();
             	    	if (resourceId!=null){
 	            	    	Log.i(TAG, "get the resourcid: " + resourceId);
